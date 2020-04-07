@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Linq;
 
 namespace MultiCoreAlgorithm
@@ -12,19 +11,24 @@ namespace MultiCoreAlgorithm
             public int Index;
             public double Lenght;
 
-            public Work() { }
+            public Work()
+            {
+            }
+
             public Work(int index, double lenght)
             {
                 Index = index;
                 Lenght = lenght;
             }
         }
+
         public class Process
         {
             public List<Work> Work;
 
             public double Start;
             public double End;
+
             public double lenght() => End - Start;
 
             public Process(double start, double end)
@@ -33,12 +37,14 @@ namespace MultiCoreAlgorithm
                 Start = start;
                 End = end;
             }
+
             public Process(double start, double end, IEnumerable<Work> _work)
             {
                 Work = new List<Work>(_work);
                 Start = start;
                 End = end;
             }
+
             public Process(double start, double end, Work _work)
             {
                 Work = new List<Work>() { _work };
@@ -46,12 +52,13 @@ namespace MultiCoreAlgorithm
                 End = end;
             }
         }
+
         public class Core
         {
             public List<Process> Processes { get; set; }
             public double Performance { get; set; }
 
-            public Core() { }
+            public Core(){}
 
             public Core(double performance)
             {
@@ -61,9 +68,8 @@ namespace MultiCoreAlgorithm
         }
 
         public double W { get; private set; }
-        public int CoreCount { get; private set; }
-        public List<Core> P { get; private set; }
-        public List<Work> T { get; private set; }
+        private List<Core> P { get; set; }
+        private List<Work> T { get; set; }
 
         public MultiCore(IEnumerable<double> _T, IEnumerable<double> _P)
         {
@@ -83,14 +89,12 @@ namespace MultiCoreAlgorithm
 
             P = P.OrderBy(e => e.Performance).Reverse().ToList();
 
-            CoreCount = P.Count();
-
             double max = 0;
             {
                 double sumT = 0;
                 double sumP = 0;
 
-                for (int i = 0; i < CoreCount && i < T.Count(); i++)
+                for (int i = 0; i < P.Count() && i < T.Count(); i++)
                 {
                     sumT += T[i].Lenght;
                     sumP += P[i].Performance;
@@ -101,40 +105,12 @@ namespace MultiCoreAlgorithm
             W = Math.Max(max, T.Sum(e => e.Lenght) / P.Sum(e => e.Performance));
         }
 
-        IEnumerable<double> Times()
-        {
-            var InList = new List<double>() { 0 };
-            while(true)
-            {
-                var times = new List<double>();
-                for (int i = 0; i < T.Count()-1; i++)
-                {
-                    double[] workCount = { T.Where(e => e.Lenght == T[i].Lenght).Count(), T.Where(e => e.Lenght == T[i+1].Lenght).Count() };
-                    double[] PerformanceSum = { PerformanceSumCalc(i), PerformanceSumCalc(i+1) };
-                    var t = (T[i].Lenght - T[i + 1].Lenght) / 
-                        (PerformanceSum[0]/workCount[0] - PerformanceSum[1] / workCount[1]) 
-                        + InList.Max();
-
-                    if (t > 0 && t <= W && t >= InList.Max())
-                        times.Add(t);
-                }
-
-                if (times.Where(e => e != 0).Count() == 0 )
-                    break;
-                
-                InList.Add(times.Min());
-                yield return times.Min();
-                
-            }
-            yield return W;
-        }
-
-        public List<Core> GetPlaning()
+        public IEnumerable<Core> GetPlaning()
         {
             foreach (var time in Times())
             {
                 List<int> InWork = new List<int>();
-                for (int core = 0; core < CoreCount; core++)
+                for (int core = 0; core < P.Count(); core++)
                 {
                     List<Work> max = new List<Work>() { new Work(0, -1) };
                     foreach (var i in T)
@@ -145,7 +121,7 @@ namespace MultiCoreAlgorithm
                         if (max[0].Lenght < i.Lenght)
                         {
                             if (max.Count() == 1)
-                                max[0] = i; 
+                                max[0] = i;
                             else
                                 max = new List<Work>() { i };
                         }
@@ -166,42 +142,55 @@ namespace MultiCoreAlgorithm
             return P;
         }
 
-        public void PrintConsole()
+        private IEnumerable<double> Times()
         {
-            foreach (var j in P)
+            var InList = new List<double>() { 0 };
+            while (true)
             {
-                Console.Write($"{j.Performance}: ");
-                foreach (var i in j.Processes)
+                var times = new List<double>();
+                for (int i = 0; i < T.Count() - 1; i++)
                 {
-                    string result = "";
-                    foreach (var k in i.Work)
-                        result += $"{k.Index}, ";
+                    if (T[i].Lenght == T[i + 1].Lenght)
+                        continue;
 
-                    Console.Write($"|{result}: {i.Start.ToString("0.00")}, {i.End.ToString("0.00")}| ");
+                    double[] workCount = { T.Where(e => e.Lenght == T[i].Lenght).Count(), T.Where(e => e.Lenght == T[i + 1].Lenght).Count() };
+                    double[] PerformanceSum = { PerformanceSumCalc(i), PerformanceSumCalc(i + 1) };
+
+                    var t = (T[i].Lenght - T[i + 1].Lenght) /
+                        (PerformanceSum[0] / workCount[0] - PerformanceSum[1] / workCount[1])
+                        + InList.Max();
+
+                    if (t <= W && t > InList.Last())
+                        times.Add(t);
                 }
-                Console.WriteLine();
+
+                if (times.Where(e => e != 0).Count() == 0)
+                    break;
+
+                InList.Add(times.Min());
+                yield return times.Min();
             }
-            Console.WriteLine($"w = {W}");
+            yield return W;
         }
-        
-        double PerformanceSumCalc(int i)
+
+        private double PerformanceSumCalc(int i)
         {
-            if(i < P.Count() && P[i].Processes.Count() == 0)
+            if (i < P.Count() && P[i].Processes.Count() == 0)
             {
                 return P[i].Performance;
             }
             else
             {
                 double sum = 0;
-                foreach(var core in P)
-                {
+                foreach (var core in P)
                     if (core.Processes.Count() > 0 && core.Processes.Last().Work.Select(e => e.Lenght).ToList().IndexOf(T[i].Lenght) != -1)
                         sum += core.Performance;
-                }
+
                 return sum;
             }
         }
-        bool IsEnd(int core, Work SearchWork)
+
+        private bool IsEnd(int core, Work SearchWork)
         {
             int depth = 1;
             int count = -1;
